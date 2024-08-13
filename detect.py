@@ -97,6 +97,56 @@ def run(
     dnn=False,  # use OpenCV DNN for ONNX inference
     vid_stride=1,  # video frame-rate stride
 ):
+    """
+    Runs YOLOv5 detection inference on various sources like images, videos, directories, streams, etc.
+
+    Args:
+        weights (str | Path): Path to the model weights file or a Triton URL. Default is 'yolov5s.pt'.
+        source (str | Path): Input source, which can be a file, directory, URL, glob pattern, screen capture, or webcam
+            index. Default is 'data/images'.
+        data (str | Path): Path to the dataset YAML file. Default is 'data/coco128.yaml'.
+        imgsz (tuple[int, int]): Inference image size as a tuple (height, width). Default is (640, 640).
+        conf_thres (float): Confidence threshold for detections. Default is 0.25.
+        iou_thres (float): Intersection Over Union (IOU) threshold for non-max suppression. Default is 0.45.
+        max_det (int): Maximum number of detections per image. Default is 1000.
+        device (str): CUDA device identifier (e.g., '0' or '0,1,2,3') or 'cpu'. Default is an empty string, which uses the
+            best available device.
+        view_img (bool): If True, display inference results using OpenCV. Default is False.
+        save_txt (bool): If True, save results in a text file. Default is False.
+        save_csv (bool): If True, save results in a CSV file. Default is False.
+        save_conf (bool): If True, include confidence scores in the saved results. Default is False.
+        save_crop (bool): If True, save cropped prediction boxes. Default is False.
+        nosave (bool): If True, do not save inference images or videos. Default is False.
+        classes (list[int]): List of class indices to filter detections by. Default is None.
+        agnostic_nms (bool): If True, perform class-agnostic non-max suppression. Default is False.
+        augment (bool): If True, use augmented inference. Default is False.
+        visualize (bool): If True, visualize feature maps. Default is False.
+        update (bool): If True, update all models' weights. Default is False.
+        project (str | Path): Directory to save results. Default is 'runs/detect'.
+        name (str): Name of the current experiment; used to create a subdirectory within 'project'. Default is 'exp'.
+        exist_ok (bool): If True, existing directories with the same name are reused instead of being incremented. Default is
+            False.
+        line_thickness (int): Thickness of bounding box lines in pixels. Default is 3.
+        hide_labels (bool): If True, do not display labels on bounding boxes. Default is False.
+        hide_conf (bool): If True, do not display confidence scores on bounding boxes. Default is False.
+        half (bool): If True, use FP16 half-precision inference. Default is False.
+        dnn (bool): If True, use OpenCV DNN backend for ONNX inference. Default is False.
+        vid_stride (int): Stride for processing video frames, to skip frames between processing. Default is 1.
+
+    Returns:
+        None
+
+    Examples:
+        ```python
+        from ultralytics import run
+
+        # Run inference on an image
+        run(source='data/images/example.jpg', weights='yolov5s.pt', device='0')
+
+        # Run inference on a video with specific confidence threshold
+        run(source='data/videos/example.mp4', weights='yolov5s.pt', conf_thres=0.4, device='0')
+        ```
+    """
     source = str(source)
     save_img = not nosave and not source.endswith(".txt")  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -190,6 +240,12 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            
+            # 荷物と人の検出フラグ
+            package_detected = False
+            person_detected = False
+            detection_results = []  # 新しいリストを作成
+            
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -205,6 +261,16 @@ def run(
                     label = names[c] if hide_conf else f"{names[c]}"
                     confidence = float(conf)
                     confidence_str = f"{confidence:.2f}"
+
+
+                    if label == 'box':
+                        package_detected = True
+                        detection_results.append(f"荷物が検出されました with confidence {confidence}")  # リストに追加
+                    elif label == 'person':
+                        person_detected = True
+                        detection_results.append(f"人が検出されました with confidence {confidence}")  # リストに追加
+                    elif label == 'sakanaka':
+                        detection_results.append(f"坂中が検出されました with confidence {confidence}")  # リストに追加 
 
                     if save_csv:
                         write_to_csv(p.name, label, confidence_str)
@@ -250,6 +316,14 @@ def run(
                         save_path = str(Path(save_path).with_suffix(".mp4"))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
                     vid_writer[i].write(im0)
+            # 出力メッセージの処理
+            for result in detection_results:
+                print(result)
+
+            if package_detected and person_detected:
+                print("盗難の可能性があります")
+            else:
+                print("No suspicious activity detected.")
 
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
@@ -265,10 +339,57 @@ def run(
 
 
 def parse_opt():
-    """Parses command-line arguments for YOLOv5 detection, setting inference options and model configurations."""
+    """
+    Parse command-line arguments for YOLOv5 detection, allowing custom inference options and model configurations.
+
+    Args:
+        --weights (str | list[str], optional): Model path or Triton URL. Defaults to ROOT / 'yolov5s.pt'.
+        --source (str, optional): File/dir/URL/glob/screen/0(webcam). Defaults to ROOT / 'data/images'.
+        --data (str, optional): Dataset YAML path. Provides dataset configuration information.
+        --imgsz (list[int], optional): Inference size (height, width). Defaults to [640].
+        --conf-thres (float, optional): Confidence threshold. Defaults to 0.25.
+        --iou-thres (float, optional): NMS IoU threshold. Defaults to 0.45.
+        --max-det (int, optional): Maximum number of detections per image. Defaults to 1000.
+        --device (str, optional): CUDA device, i.e., '0' or '0,1,2,3' or 'cpu'. Defaults to "".
+        --view-img (bool, optional): Flag to display results. Defaults to False.
+        --save-txt (bool, optional): Flag to save results to *.txt files. Defaults to False.
+        --save-csv (bool, optional): Flag to save results in CSV format. Defaults to False.
+        --save-conf (bool, optional): Flag to save confidences in labels saved via --save-txt. Defaults to False.
+        --save-crop (bool, optional): Flag to save cropped prediction boxes. Defaults to False.
+        --nosave (bool, optional): Flag to prevent saving images/videos. Defaults to False.
+        --classes (list[int], optional): List of classes to filter results by, e.g., '--classes 0 2 3'. Defaults to None.
+        --agnostic-nms (bool, optional): Flag for class-agnostic NMS. Defaults to False.
+        --augment (bool, optional): Flag for augmented inference. Defaults to False.
+        --visualize (bool, optional): Flag for visualizing features. Defaults to False.
+        --update (bool, optional): Flag to update all models in the model directory. Defaults to False.
+        --project (str, optional): Directory to save results. Defaults to ROOT / 'runs/detect'.
+        --name (str, optional): Sub-directory name for saving results within --project. Defaults to 'exp'.
+        --exist-ok (bool, optional): Flag to allow overwriting if the project/name already exists. Defaults to False.
+        --line-thickness (int, optional): Thickness (in pixels) of bounding boxes. Defaults to 3.
+        --hide-labels (bool, optional): Flag to hide labels in the output. Defaults to False.
+        --hide-conf (bool, optional): Flag to hide confidences in the output. Defaults to False.
+        --half (bool, optional): Flag to use FP16 half-precision inference. Defaults to False.
+        --dnn (bool, optional): Flag to use OpenCV DNN for ONNX inference. Defaults to False.
+        --vid-stride (int, optional): Video frame-rate stride, determining the number of frames to skip in between
+            consecutive frames. Defaults to 1.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments as an argparse.Namespace object.
+
+    Example:
+        ```python
+        from ultralytics import YOLOv5
+        args = YOLOv5.parse_opt()
+        ```
+    """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5s.pt", help="model path or triton URL")
-    parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
+    # parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5s.pt", help="model path or triton URL")
+    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp16/weights/best.pt", help="model path or triton URL")
+    
+    # parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
+    # parser.add_argument("--source", type=str, default=0, help="file/dir/URL/glob/screen/0(webcam)")#1.webcamの場合
+    parser.add_argument("--source", type=str, default=ROOT / "data/test", help="file/dir/URL/glob/screen/0(webcam)")#2.画像判定の場合
+
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="(optional) dataset.yaml path")
     parser.add_argument("--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")
@@ -302,7 +423,28 @@ def parse_opt():
 
 
 def main(opt):
-    """Executes YOLOv5 model inference with given options, checking requirements before running the model."""
+    """
+    Executes YOLOv5 model inference based on provided command-line arguments, validating dependencies before running.
+
+    Args:
+        opt (argparse.Namespace): Command-line arguments for YOLOv5 detection. See function `parse_opt` for details.
+
+    Returns:
+        None
+
+    Note:
+        This function performs essential pre-execution checks and initiates the YOLOv5 detection process based on user-specified
+        options. Refer to the usage guide and examples for more information about different sources and formats at:
+        https://github.com/ultralytics/ultralytics
+
+    Example usage:
+
+    ```python
+    if __name__ == "__main__":
+        opt = parse_opt()
+        main(opt)
+    ```
+    """
     check_requirements(ROOT / "requirements.txt", exclude=("tensorboard", "thop"))
     run(**vars(opt))
 
