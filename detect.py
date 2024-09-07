@@ -452,3 +452,81 @@ def main(opt):
 if __name__ == "__main__":
     opt = parse_opt()
     main(opt)
+
+# import torch
+# import cv2
+
+# # モデルのパスを指定
+# model_path = 'runs/train/exp19/weights/best.pt'  # カスタムモデルの重みファイルのパス
+
+# # YOLOv5のモデルをロード（学習済みの重みを指定）
+# model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
+
+# # カメラ映像をキャプチャする
+# cap = cv2.VideoCapture(0)
+
+# # 初期状態での"box"のバウンディングボックス座標
+# prev_box_coords = None
+
+# while True:
+#     # カメラからフレームを取得
+#     ret, frame = cap.read()
+#     if not ret:
+#         print("フレームを取得できませんでした")
+#         break
+
+#     # モデルで推論を行う
+#     results = model(frame)
+
+#     # "box"の移動を検知するためのフラグ
+#     box_moved = False
+
+#     # "sakanaka"が検出されているかどうかのフラグ
+#     sakanaka_detected = False
+
+#     # 検出されたオブジェクトをループで回す
+#     for det in results.xyxy[0]:
+#         x1, y1, x2, y2, conf, cls = det
+#         label = results.names[int(cls)]
+
+#         if label == "box":
+#             # バウンディングボックスの中心座標を計算
+#             #・x：中心のx座標・y：中心のy座標・w：横幅・h：縦幅・F：信頼度
+#             center_x = (x1 + x2) / 2
+#             center_y = (y1 + y2) / 2
+
+#             if prev_box_coords is not None:
+#                 # 前回の位置と現在の位置の差を計算
+#                 delta_x = abs(center_x - prev_box_coords[0])
+#                 delta_y = abs(center_y - prev_box_coords[1])
+
+#                 # 移動量が縦横10ピクセル以上かどうかを判定
+#                 if delta_x > 10 or delta_y > 10:
+#                     box_moved = True
+#                     print("移動検知: boxが移動しました")
+
+#             # 現在の位置を保存
+#             prev_box_coords = (center_x, center_y)
+
+#         elif label == "sakanaka":
+#             sakanaka_detected = True
+#             print("坂中が検出されました。")
+
+#         # バウンディングボックスの描画
+#         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+#         cv2.putText(frame, f'{label} {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+#     # "sakanaka"が検出されていないときに"box"が移動したら盗難検知
+#     if not sakanaka_detected and box_moved:
+#         print("盗難の恐れがあります。")
+
+#     # フレームを表示する
+#     cv2.imshow('Real-time Detection', frame)
+
+#     # 'q'キーが押されたらループを抜ける
+#     if cv2.waitKey(1) & 0xFF == ord('q'):
+#         break
+
+# # カメラとウィンドウを解放する
+# cap.release()
+# cv2.destroyAllWindows()

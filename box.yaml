@@ -3,6 +3,6 @@ val: data/val
 test: data/test
 
 
-nc: 3
+nc: 2
 
-names: ['box','person','sakanaka']
+names: ['box','sakanaka']
